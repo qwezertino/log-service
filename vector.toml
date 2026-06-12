@@ -1,0 +1,115 @@
+# ── Sources ─────────────────────────────────────────────────────────────────
+# Read stdout/stderr of all Docker containers via the Docker socket.
+# Vector reconnects automatically on Docker daemon restarts.
+[sources.docker]
+type = "docker_logs"
+docker_host = "unix:///var/run/docker.sock"
+# exclude containers with label logging.exclude=true (e.g. vector itself)
+
+# ── Transforms ───────────────────────────────────────────────────────────────
+# 1. Extract a clean "service" field from the container label or name.
+#    Each service should have label: logging.service=<name>
+#    (see "What to add to each service" in README)
+[transforms.tag_service]
+type = "remap"
+inputs = ["docker"]
+source = '''
+  # Skip containers marked with logging.exclude=true
+  if (string(.label."logging.exclude") ?? "") == "true" { abort }
+
+  # Use the logging.service label if present, otherwise fall back to container name
+  .service = string(.label."logging.service") ?? .container_name
+'''
+
+# 2. Try to parse the log message as JSON (Go zap/zerolog, MinIO).
+#    If it's not JSON, keep the raw string in .message.
+[transforms.parse_json]
+type = "remap"
+inputs = ["tag_service"]
+source = '''
+  parsed, err = parse_json(.message)
+  if err == null && is_object(parsed) {
+    ., _merge_err = merge(., parsed)
+  }
+'''
+
+# 3. Route to per-service streams in OpenObserve.
+#    Each route key becomes the stream name in OpenObserve.
+[transforms.route]
+type = "route"
+inputs = ["parse_json"]
+route.go    = '.service == "gogeoapp"'
+route.php   = '.service == "soft-farm" || .service == "sf_app"'
+route.minio = '.service == "minio"'
+route.other = 'true'   # catch-all for everything else
+
+# ── Sinks ────────────────────────────────────────────────────────────────────
+# Drop anything the route didn't match (route._unmatched must have a consumer)
+[sinks.drop_unmatched]
+type = "blackhole"
+inputs = ["route._unmatched"]
+
+
+# Go NDVI service → stream "go-ndvi"
+[sinks.oo_go]
+type = "http"
+inputs = ["route.go"]
+uri = "http://openobserve:5080/api/default/go-ndvi/_json"
+method = "post"
+auth.strategy = "basic"
+auth.user = "${ZO_ROOT_USER_EMAIL}"
+auth.password = "${ZO_ROOT_USER_PASSWORD}"
+encoding.codec = "json"
+batch.timeout_secs = 5
+batch.max_bytes = 1_048_576   # 1 MB
+
+[sinks.oo_go.request.headers]
+Content-Type = "application/json"
+
+# PHP / Yii2 → stream "php-softfarm"
+[sinks.oo_php]
+type = "http"
+inputs = ["route.php"]
+uri = "http://openobserve:5080/api/default/php-softfarm/_json"
+method = "post"
+auth.strategy = "basic"
+auth.user = "${ZO_ROOT_USER_EMAIL}"
+auth.password = "${ZO_ROOT_USER_PASSWORD}"
+encoding.codec = "json"
+batch.timeout_secs = 5
+batch.max_bytes = 1_048_576
+
+[sinks.oo_php.request.headers]
+Content-Type = "application/json"
+
+# MinIO → stream "minio"
+[sinks.oo_minio]
+type = "http"
+inputs = ["route.minio"]
+uri = "http://openobserve:5080/api/default/minio/_json"
+method = "post"
+auth.strategy = "basic"
+auth.user = "${ZO_ROOT_USER_EMAIL}"
+auth.password = "${ZO_ROOT_USER_PASSWORD}"
+encoding.codec = "json"
+batch.timeout_secs = 5
+batch.max_bytes = 1_048_576
+
+[sinks.oo_minio.request.headers]
+Content-Type = "application/json"
+
+# Everything else (nginx, postgis, redis, …) → stream "other"
+[sinks.oo_other]
+type = "http"
+inputs = ["route.other"]
+uri = "http://openobserve:5080/api/default/other/_json"
+method = "post"
+auth.strategy = "basic"
+auth.user = "${ZO_ROOT_USER_EMAIL}"
+auth.password = "${ZO_ROOT_USER_PASSWORD}"
+encoding.codec = "json"
+batch.timeout_secs = 5
+batch.max_bytes = 1_048_576
+
+[sinks.oo_other.request.headers]
+Content-Type = "application/json"
