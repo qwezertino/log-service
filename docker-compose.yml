@@ -14,14 +14,14 @@ services:
       # Use MinIO as S3-compatible object storage backend.
       # ZO_LOCAL_MODE=true keeps single-node (SQLite meta).
       # ZO_LOCAL_MODE_STORAGE=s3 makes parquet data go to S3 instead of local disk.
-      ZO_LOCAL_MODE: "true"
-      ZO_LOCAL_MODE_STORAGE: "s3"
-      ZO_S3_PROVIDER: minio
+      ZO_LOCAL_MODE: ${ZO_LOCAL_MODE:-true}
+      ZO_LOCAL_MODE_STORAGE: ${ZO_LOCAL_MODE_STORAGE:-s3}
+      ZO_S3_PROVIDER: ${ZO_S3_PROVIDER:-minio}
       ZO_S3_SERVER_URL: ${MINIO_ENDPOINT}
       ZO_S3_ACCESS_KEY: ${MINIO_ROOT_USER}
       ZO_S3_SECRET_KEY: ${MINIO_ROOT_PASSWORD}
       ZO_S3_BUCKET_NAME: ${OO_BUCKET:-openobserve-logs}
-      ZO_S3_REGION_NAME: us-east-1
+      ZO_S3_REGION_NAME: ${ZO_S3_REGION_NAME:-us-east-1}
       ZO_COMPACT_DATA_RETENTION_DAYS: ${LOG_RETENTION_DAYS:-90}
       ZO_COMPACT_INTERVAL: ${ZO_COMPACT_INTERVAL:-1}
       ZO_FILE_PUSH_INTERVAL: ${ZO_FILE_PUSH_INTERVAL:-5}
