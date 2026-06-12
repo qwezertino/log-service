@@ -38,10 +38,10 @@ source = '''
 [transforms.route]
 type = "route"
 inputs = ["parse_json"]
-route.go    = '.service == "gogeoapp"'
-route.php   = '.service == "soft-farm" || .service == "sf_app"'
-route.minio = '.service == "minio"'
-route.other = 'true'   # catch-all for everything else
+route.go    = 'starts_with(string(.service) ?? "", "geogoservice-") || .service == "gogeoapp"'
+route.php   = 'starts_with(string(.service) ?? "", "sf_") || .service == "soft-farm"'
+route.minio = '.service == "minio-infra-minio-1" || .service == "minio"'
+route.other = 'true'
 
 # ── Sinks ────────────────────────────────────────────────────────────────────
 # Drop anything the route didn't match (route._unmatched must have a consumer)

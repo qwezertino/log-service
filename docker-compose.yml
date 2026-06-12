@@ -4,20 +4,33 @@ services:
   openobserve:
     image: public.ecr.aws/zinclabs/openobserve:latest
     restart: unless-stopped
+    labels:
+      logging.exclude: "true"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     environment:
       ZO_ROOT_USER_EMAIL: ${ZO_ROOT_USER_EMAIL}
       ZO_ROOT_USER_PASSWORD: ${ZO_ROOT_USER_PASSWORD}
-      # Use existing MinIO as object storage backend
-      ZO_STORAGE_TYPE: s3
+      # Use MinIO as S3-compatible object storage backend.
+      # ZO_LOCAL_MODE=true keeps single-node (SQLite meta).
+      # ZO_LOCAL_MODE_STORAGE=s3 makes parquet data go to S3 instead of local disk.
+      ZO_LOCAL_MODE: "true"
+      ZO_LOCAL_MODE_STORAGE: "s3"
+      ZO_S3_PROVIDER: minio
       ZO_S3_SERVER_URL: ${MINIO_ENDPOINT}
       ZO_S3_ACCESS_KEY: ${MINIO_ROOT_USER}
       ZO_S3_SECRET_KEY: ${MINIO_ROOT_PASSWORD}
       ZO_S3_BUCKET_NAME: ${OO_BUCKET:-openobserve-logs}
-      ZO_S3_FORCE_PATH_STYLE: "true"
       ZO_S3_REGION_NAME: us-east-1
       ZO_COMPACT_DATA_RETENTION_DAYS: ${LOG_RETENTION_DAYS:-90}
+      ZO_COMPACT_INTERVAL: ${ZO_COMPACT_INTERVAL:-1}
+      ZO_FILE_PUSH_INTERVAL: ${ZO_FILE_PUSH_INTERVAL:-5}
+      ZO_MAX_FILE_RETENTION_TIME: ${ZO_MAX_FILE_RETENTION_TIME:-60}
+      ZO_MEM_PERSIST_INTERVAL: ${ZO_MEM_PERSIST_INTERVAL:-2}
     ports:
       - "${HOST_PORT_OO:-5080}:5080"
+    volumes:
+      - oo-data:/data
     networks:
       - log-net
 
@@ -42,3 +55,6 @@ services:
 
 networks:
   log-net:
+
+volumes:
+  oo-data:
