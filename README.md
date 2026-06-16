@@ -1,6 +1,6 @@
 # log-service
 
-Centralised log aggregation stack based on **Vector** + **OpenObserve** with **MinIO** as the object storage backend.
+Centralised log aggregation stack based on **Vector** + **OpenObserve** with **SeaweedFS** (S3-compatible) as the object storage backend.
 
 ```
 [ Any Docker container ] ──► (stdout)
@@ -15,13 +15,13 @@ Centralised log aggregation stack based on **Vector** + **OpenObserve** with **M
     [ OpenObserve ]        – indexes, stores, search UI
           │  S3 API
           ▼
-       [ MinIO ]           – Parquet files, long-term storage
+     [ SeaweedFS ]         – Parquet files, long-term storage
 ```
 
 ## Requirements
 
 - Docker + Docker Compose v2
-- A running MinIO instance (can be a separate project — only the HTTP endpoint is required, no shared network needed)
+- A running S3-compatible object store, e.g. the `seaweedfs-infra` project (shares the `ndvi-go-net` docker network)
 
 ## Setup
 
@@ -37,16 +37,16 @@ Edit `.env` and fill in your values:
 |---|---|
 | `ZO_ROOT_USER_EMAIL` | OpenObserve admin login (email format) |
 | `ZO_ROOT_USER_PASSWORD` | Min 8 chars, must include upper, lower, digit and special char |
-| `MINIO_ENDPOINT` | Full MinIO URL, e.g. `http://192.168.1.10:9000` |
-| `MINIO_ROOT_USER` | MinIO root access key |
-| `MINIO_ROOT_PASSWORD` | MinIO root secret key |
+| `S3_ENDPOINT` | Full S3 gateway URL, e.g. `http://seaweed:8333` |
+| `S3_ACCESS_KEY` | S3 access key |
+| `S3_SECRET_KEY` | S3 secret key |
 | `OO_BUCKET` | Bucket name for log storage (default: `openobserve-logs`) |
 | `HOST_PORT_OO` | Host port to expose OpenObserve UI (default: `5080`) |
 | `LOG_RETENTION_DAYS` | How long to keep logs in days (default: `90`) |
 
-### 2. Create the MinIO bucket
+### 2. Create the S3 bucket
 
-Open your MinIO console and create a bucket matching `OO_BUCKET` (default: `openobserve-logs`).
+The `oo-init` service creates the bucket matching `OO_BUCKET` automatically on `docker compose up` — no manual step needed.
 
 ### 3. Start the stack
 
@@ -90,7 +90,7 @@ labels:
 |---|---|
 | `go-ndvi` | `logging.service: gogeoapp` |
 | `php-softfarm` | `logging.service: soft-farm` or container name `sf_app` |
-| `minio` | `logging.service: minio` |
+| `s3` | `logging.service: seaweedfs` |
 | `other` | everything else |
 
 To add a new dedicated stream, add a route + sink pair in `vector.toml`.
@@ -98,7 +98,7 @@ To add a new dedicated stream, add a route + sink pair in `vector.toml`.
 ## Viewing logs
 
 1. Go to **http://localhost:5080** → **Logs**
-2. Select a stream from the dropdown (`go-ndvi`, `php-softfarm`, `minio`, `other`)
+2. Select a stream from the dropdown (`go-ndvi`, `php-softfarm`, `s3`, `other`)
 3. Use the search bar to filter — examples:
    - `service = 'gogeoapp'` — one specific service
    - `level = 'error'` — errors only

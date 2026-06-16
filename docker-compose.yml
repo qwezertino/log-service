@@ -1,20 +1,19 @@
 services:
-  # ── MinIO bucket initializer (runs once, connects to external minio) ─────────
-  # MinIO itself lives in the separate minio-infra project.
+  # ── S3 bucket initializer (runs once, connects to external SeaweedFS) ────────
+  # Uses SeaweedFS's own `weed shell` (Apache-2.0) instead of MinIO's `mc` —
+  # no S3 credentials needed, goes through the master API directly.
   oo-init:
-    image: minio/mc:RELEASE.2025-08-13T08-35-41Z-cpuv1
+    image: chrislusf/seaweedfs:latest
+    entrypoint: /bin/sh
     environment:
-      MINIO_ENDPOINT: ${MINIO_ENDPOINT}
-      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+      SEAWEED_MASTER: ${SEAWEED_MASTER:-seaweed:9333}
       OO_BUCKET: ${OO_BUCKET:-openobserve-logs}
-    entrypoint: >
-      /bin/sh -c "
-        until mc alias set local $$MINIO_ENDPOINT $$MINIO_ROOT_USER $$MINIO_ROOT_PASSWORD; do
-          echo 'Waiting for MinIO...'; sleep 3;
-        done &&
-        mc mb --ignore-existing local/$$OO_BUCKET
-      "
+    command:
+      - -c
+      - >
+        until echo "s3.bucket.create -name $$OO_BUCKET" | weed shell -master=$$SEAWEED_MASTER; do
+          echo 'Waiting for SeaweedFS...'; sleep 3;
+        done
     restart: "on-failure"
     networks:
       - ndvi-go-net
@@ -29,15 +28,15 @@ services:
     environment:
       ZO_ROOT_USER_EMAIL: ${ZO_ROOT_USER_EMAIL}
       ZO_ROOT_USER_PASSWORD: ${ZO_ROOT_USER_PASSWORD}
-      # Use MinIO as S3-compatible object storage backend.
+      # Use SeaweedFS as S3-compatible object storage backend.
       # ZO_LOCAL_MODE=true keeps single-node (SQLite meta).
       # ZO_LOCAL_MODE_STORAGE=s3 makes parquet data go to S3 instead of local disk.
       ZO_LOCAL_MODE: ${ZO_LOCAL_MODE:-true}
       ZO_LOCAL_MODE_STORAGE: ${ZO_LOCAL_MODE_STORAGE:-s3}
       ZO_S3_PROVIDER: ${ZO_S3_PROVIDER:-minio}
-      ZO_S3_SERVER_URL: ${MINIO_ENDPOINT}
-      ZO_S3_ACCESS_KEY: ${MINIO_ROOT_USER}
-      ZO_S3_SECRET_KEY: ${MINIO_ROOT_PASSWORD}
+      ZO_S3_SERVER_URL: ${S3_ENDPOINT}
+      ZO_S3_ACCESS_KEY: ${S3_ACCESS_KEY}
+      ZO_S3_SECRET_KEY: ${S3_SECRET_KEY}
       ZO_S3_BUCKET_NAME: ${OO_BUCKET:-openobserve-logs}
       ZO_S3_REGION_NAME: ${ZO_S3_REGION_NAME:-us-east-1}
       ZO_COMPACT_DATA_RETENTION_DAYS: ${LOG_RETENTION_DAYS:-90}

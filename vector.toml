@@ -21,7 +21,7 @@ source = '''
   .service = string(.label."logging.service") ?? .container_name
 '''
 
-# 2. Try to parse the log message as JSON (Go zap/zerolog, MinIO).
+# 2. Try to parse the log message as JSON (Go zap/zerolog, SeaweedFS).
 #    If it's not JSON, keep the raw string in .message.
 [transforms.parse_json]
 type = "remap"
@@ -40,7 +40,7 @@ type = "route"
 inputs = ["parse_json"]
 route.go    = 'starts_with(string(.service) ?? "", "geogoservice-") || .service == "gogeoapp"'
 route.php   = 'starts_with(string(.service) ?? "", "sf_") || .service == "soft-farm"'
-route.minio = '.service == "minio-infra-minio-1" || .service == "minio"'
+route.s3    = '.service == "seaweedfs" || .service == "seaweedfs-infra-seaweed-1"'
 route.other = 'true'
 
 # ── Sinks ────────────────────────────────────────────────────────────────────
@@ -82,11 +82,11 @@ batch.max_bytes = 1_048_576
 [sinks.oo_php.request.headers]
 Content-Type = "application/json"
 
-# MinIO → stream "minio"
-[sinks.oo_minio]
+# SeaweedFS (S3-compatible storage) → stream "s3"
+[sinks.oo_s3]
 type = "http"
-inputs = ["route.minio"]
-uri = "http://openobserve:5080/api/default/minio/_json"
+inputs = ["route.s3"]
+uri = "http://openobserve:5080/api/default/s3/_json"
 method = "post"
 auth.strategy = "basic"
 auth.user = "${ZO_ROOT_USER_EMAIL}"
@@ -95,7 +95,7 @@ encoding.codec = "json"
 batch.timeout_secs = 5
 batch.max_bytes = 1_048_576
 
-[sinks.oo_minio.request.headers]
+[sinks.oo_s3.request.headers]
 Content-Type = "application/json"
 
 # Everything else (nginx, postgis, redis, …) → stream "other"
