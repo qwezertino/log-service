@@ -31,7 +31,7 @@ services:
       - oo-data:/data
     networks:
       - log-net
-      - shared-net
+      - ndvi-go-net
 
   # ── Vector ──────────────────────────────────────────────────────────────────
   # Reads logs from Docker daemon, forwards to OpenObserve
@@ -54,7 +54,7 @@ services:
 
 networks:
   log-net:
-  shared-net:
+  ndvi-go-net:
     external: true
 
 volumes:
