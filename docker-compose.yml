@@ -1,4 +1,24 @@
 services:
+  # ── MinIO bucket initializer (runs once, connects to external minio) ─────────
+  # MinIO itself lives in the separate minio-infra project.
+  oo-init:
+    image: minio/mc:latest
+    environment:
+      MINIO_ENDPOINT: ${MINIO_ENDPOINT}
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+      OO_BUCKET: ${OO_BUCKET:-openobserve-logs}
+    entrypoint: >
+      /bin/sh -c "
+        until mc alias set local $$MINIO_ENDPOINT $$MINIO_ROOT_USER $$MINIO_ROOT_PASSWORD; do
+          echo 'Waiting for MinIO...'; sleep 3;
+        done &&
+        mc mb --ignore-existing local/$$OO_BUCKET
+      "
+    restart: "on-failure"
+    networks:
+      - ndvi-go-net
+
   # ── OpenObserve ─────────────────────────────────────────────────────────────
   # Web UI: http://localhost:5080
   openobserve:
@@ -29,6 +49,9 @@ services:
       - "${HOST_PORT_OO:-5080}:5080"
     volumes:
       - oo-data:/data
+    depends_on:
+      oo-init:
+        condition: service_completed_successfully
     networks:
       - log-net
       - ndvi-go-net
